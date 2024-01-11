@@ -61,6 +61,7 @@ int main()
 	shader.vertexAttribsEnable();
 	shader.uniformAdd("u_projection", Renderer::UniformType::MAT4);
 	shader.uniformAdd("u_randTexture", Renderer::UniformType::INT);
+	shader.uniformAdd("u_randSampler", Renderer::UniformType::FLOAT);
 	Renderer::Mat4<float> projection_matrix = Renderer::Math::projection2D(
 		0.f, static_cast<float>(WINDOW_WIDTH),
 		0.f, static_cast<float>(WINDOW_HEIGHT),
@@ -68,6 +69,7 @@ int main()
 	);
 	shader.setUniformMatrix("u_projection", *projection_matrix);
 	shader.setUniformInt("u_randTexture", 0);
+	shader.setUniformFloat("u_randSampler", 0.f);
 
 	// create the random normal vector texture
 	unsigned char* rand_vec_data = new unsigned char[WINDOW_WIDTH * WINDOW_HEIGHT * 3];
@@ -81,8 +83,11 @@ int main()
 		rand_vec_data[i * 3 + 2] = static_cast<unsigned char>(rand_vector.z * 255);
 	}
 
+	float random_sampler = 0.f;
+
 	Renderer::Texture random_vectors(8);
 	random_vectors.setTextureFilter(GL_NEAREST, GL_NEAREST);
+	random_vectors.setTextureWrap(GL_REPEAT, GL_REPEAT);
 	random_vectors.create(&window, WINDOW_WIDTH, WINDOW_HEIGHT, 3, rand_vec_data);
 	delete[] rand_vec_data;
 
@@ -97,6 +102,9 @@ int main()
 		previous_time = current_time;
 		float dt = elapsed_time.count() * 1e-9;
 		std::cout << 1.f / dt << "\n";
+
+		random_sampler = dis(gen) * WINDOW_WIDTH;
+		shader.setUniformFloat("u_randSampler", random_sampler);
 
 		// clear buffer
 		glClear(GL_COLOR_BUFFER_BIT);
