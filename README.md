@@ -1,2 +1,2 @@
 # Ray Tracing
-## In the CPU
+## In the GPU (OpenGL Fragment Shader)
