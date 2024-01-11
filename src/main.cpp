@@ -162,16 +162,16 @@ void renderPerPixel(int _x, int _y, float &_red, float &_green, float &_blue)
 		float closest_hit = FLT_MAX;
 		int object_idx = -1;
 		// sphere collisions
-		for(int i=0;i<scene_spheres.size();++i)
+		for(int j=0;j<scene_spheres.size();++j)
 		{
-			float t = scene_spheres[i].findT(ray.origin, ray.direction);
+			float t = scene_spheres[j].findT(ray.origin, ray.direction);
 			if(t <= 0)
 				continue;
 
 			if(closest_hit > t && t > 0.0000000001f)
 			{
 				closest_hit = t;
-				object_idx = i;
+				object_idx = j;
 			}
 		}
 		if(object_idx > -1)
