@@ -1,7 +1,7 @@
 #version 410 core
 
-in vec2 v_coord;
-in vec2 v_screenPos;
+in vec2 v_texCoord;
+in vec2 v_rayCoord;
 
 uniform sampler2D u_randTexture;
 uniform float u_randSampler;
@@ -25,19 +25,20 @@ void main()
 	float focal_distance = -400.f;
 
 	const int sphere_count = 4;
-	const int ray_bounce = 12;
+	const int ray_bounce = 8;
 
-	vec2 tex_coord = (v_coord + vec2(u_randSampler, 0.f)) / vec2(window_width, window_height);
+	// might be a better way to randomize
+	vec2 tex_coord = v_texCoord + vec2(u_randSampler, 0.f);
 	vec4 rand_vec = texture(u_randTexture, tex_coord);
 	rand_vec = (rand_vec - vec4(0.5f)) * vec4(2.f);
 
 	float radius[sphere_count] = float[](0.5f, 10.f, 0.4f, 0.3f);
-	vec3 positions[sphere_count] = vec3[](vec3(0.f, -0.1f, -4.f), vec3(0.f, -11.f, -2.f), vec3(2.f, 0.f, -3.f), vec3(2.f, 0.f, -5.f));
+	vec3 positions[sphere_count] = vec3[](vec3(0.f, -0.7f, -4.f), vec3(0.f, -11.f, -2.f), vec3(2.f, 0.f, -3.f), vec3(2.f, 0.f, -5.f));
 	vec3 color[sphere_count] = vec3[](vec3(1.f, 0.5f, 0.5f), vec3(0.5f, 0.5f, 1.f), vec3(0.9f, 0.9f, 0.9f), vec3(0.48f, 0.38f, 0.57f));
 	float brightness[sphere_count] = float[](0.f, 0.f, 20.f, 0.f);
 
 	vec3 ray_origin = vec3(0.f, 0.f, 0.f);
-	vec3 ray_direction = vec3(v_coord.x - window_width / 2.f, v_coord.y - window_height / 2.f, focal_distance);
+	vec3 ray_direction = vec3(v_rayCoord.x, v_rayCoord.y, focal_distance);
 
 	vec3 absorb_col = vec3(1.f);
 	vec3 light_col = vec3(0.f);
@@ -69,7 +70,8 @@ void main()
 		{
 			// ensure absorb color is between 0 and 1, no idea why code breaks when i remove this.
 			absorb_col = clamp(absorb_col, vec3(0.f), vec3(1.f));
-			light_col += vec3(0.627f, 1.f, 1.f) * absorb_col;
+			//light_col += vec3(0.627f, 1.f, 1.f) * absorb_col;
+			light_col += vec3(0.f);
 			break;
 		}
 
