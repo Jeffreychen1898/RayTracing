@@ -18,7 +18,6 @@
 
 #define WINDOW_WIDTH 800
 #define WINDOW_HEIGHT 600
-#define BATCH_COUNT 50
 
 #define FOCAL_DISTANCE 400
 
@@ -49,15 +48,12 @@ int main()
 	renderer.attach(&window);
 	renderer.init();
 
-	// gl enable
-	glPointSize(4.f);
-
 	// create the shader
 	Renderer::Shader shader;
 	shader.attach(&window);
 	shader.createFromFile("res/basic.vert", "res/basic.frag", true);
 	shader.vertexAttribAdd(0, Renderer::AttribType::VEC2);
-	shader.vertexAttribAdd(1, Renderer::AttribType::VEC3);
+	shader.vertexAttribAdd(1, Renderer::AttribType::VEC2);
 	shader.vertexAttribsEnable();
 	shader.uniformAdd("u_projection", Renderer::UniformType::MAT4);
 	shader.uniformAdd("u_randTexture", Renderer::UniformType::INT);
@@ -77,7 +73,9 @@ int main()
 	{
 		Renderer::Vec3<float> rand_vector;
 		randVec3(rand_vector);
+		rand_vector = (rand_vector + Renderer::Vec3<float>(1.f)) * Renderer::Vec3<float>(0.5f);
 
+		// issue: does not include negatives
 		rand_vec_data[i * 3] = static_cast<unsigned char>(rand_vector.x * 255);
 		rand_vec_data[i * 3 + 1] = static_cast<unsigned char>(rand_vector.y * 255);
 		rand_vec_data[i * 3 + 2] = static_cast<unsigned char>(rand_vector.z * 255);
@@ -111,27 +109,27 @@ int main()
 
 		// draw a point on the screen
 		renderer.bindShader(&shader);
-		for(int b=0;b<BATCH_COUNT;++b)
-		{
-			// render each batch
-			int render_height = std::ceil(WINDOW_HEIGHT / static_cast<float>(BATCH_COUNT));
-			renderer.beginShape(Renderer::DrawType::POINTS, WINDOW_WIDTH*render_height, 0);
+		renderer.beginShape(Renderer::DrawType::TRIANGLE, 4, 0);
 
-			for(int i=0;i<render_height;++i)
-			{
-				for(int j=0;j<WINDOW_WIDTH;++j)
-				{
-					int y_coord = i + render_height * b;
+		renderer.vertex2f(0, 0);
+		renderer.vertex2f(0.f, WINDOW_HEIGHT);
 
-					if(!(i == 0 && j == 0))
-						renderer.nextVertex();
-					renderer.vertex2f(j, y_coord);
-					renderer.vertex3f(1.f, 1.f, 1.f);
-				}
-			}
-			
-			renderer.endShape();
-		}
+		renderer.nextVertex();
+		
+		renderer.vertex2f(WINDOW_WIDTH, 0);
+		renderer.vertex2f(WINDOW_WIDTH, WINDOW_HEIGHT);
+
+		renderer.nextVertex();
+
+		renderer.vertex2f(WINDOW_WIDTH, WINDOW_HEIGHT);
+		renderer.vertex2f(WINDOW_WIDTH, 0);
+
+		renderer.nextVertex();
+
+		renderer.vertex2f(0, WINDOW_HEIGHT);
+		renderer.vertex2f(0, 0);
+
+		renderer.endShape();
 
 		renderer.render();
 
