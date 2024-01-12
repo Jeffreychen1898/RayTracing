@@ -17,15 +17,37 @@
 //		shader must be bound when resizing window?
 //		vector and matrix *=, +=, etc
 
-#define WINDOW_WIDTH 1024
-#define WINDOW_HEIGHT 768
+#define WINDOW_WIDTH 800
+#define WINDOW_HEIGHT 600
 
 #define FOCAL_DISTANCE 400
 
+static float camera_position[] = {0.f, 0.f, 0.f};
+static float camera_forward[] = {0.f, 0.f, -1.f};
+static float camera_up[] = {0.f, 1.f, 0.f};
+static bool should_reset_accum = false;
+
 class WindowEvents : public Renderer::WindowEvents
 {
+	public:
+	Renderer::Shader* rt_shader;
 	void KeyPressed(int _key, int _scancode, int _mods) override
 	{
+		bool cam_changed = true;
+		if(_key == 87)
+			camera_position[1] += 0.1f;
+		else if(_key == 83)
+			camera_position[1] -= 0.1f;
+		else if(_key == 65)
+			camera_position[0] -= 0.1f;
+		else if(_key == 68)
+			camera_position[0] += 0.1f;
+		else
+			cam_changed = false;
+
+		if(cam_changed)
+			should_reset_accum = true;
+		rt_shader->setUniformFloat("u_cameraPosition", camera_position);
 		std::cout << _key << " pressed!\n";
 	}
 
@@ -66,7 +88,8 @@ int main()
 	renderer.init();
 
 	// create the shader
-	Renderer::Shader shader;
+	Renderer::Shader shader(true);
+	win_evt->rt_shader = &shader;
 	shader.attach(&window);
 	shader.createFromFile("res/basic.vert", "res/basic.frag", true);
 	shader.vertexAttribAdd(0, Renderer::AttribType::VEC2); // position
@@ -74,15 +97,21 @@ int main()
 	shader.vertexAttribsEnable();
 	shader.uniformAdd("u_randTexture", Renderer::UniformType::INT);
 	shader.uniformAdd("u_randSampler", Renderer::UniformType::VEC2);
+	shader.uniformAdd("u_cameraPosition", Renderer::UniformType::VEC3);
+	shader.uniformAdd("u_cameraForward", Renderer::UniformType::VEC3);
+	shader.uniformAdd("u_cameraUp", Renderer::UniformType::VEC3);
 	Renderer::Mat4<float> projection_matrix = Renderer::Math::projection2D(
 		0.f, static_cast<float>(WINDOW_WIDTH),
 		0.f, static_cast<float>(WINDOW_HEIGHT),
 		1.f, -1.f
 	);
 	shader.setUniformInt("u_randTexture", 0);
+	shader.setUniformFloat("u_cameraPosition", camera_position);
+	shader.setUniformFloat("u_cameraForward", camera_forward);
+	shader.setUniformFloat("u_cameraUp", camera_up);
 
 	// create the shader to average each frame
-	Renderer::Shader accumShader;
+	Renderer::Shader accumShader(true);
 	accumShader.attach(&window);
 	accumShader.createFromFile("res/average.vert", "res/average.frag", true);
 	accumShader.vertexAttribAdd(0, Renderer::AttribType::VEC2);
@@ -167,7 +196,12 @@ int main()
 		// clear buffer
 		glBindFramebuffer(GL_FRAMEBUFFER, accum_fbo);
 		glViewport(0, 0, WINDOW_WIDTH, WINDOW_HEIGHT);
-		//glClear(GL_COLOR_BUFFER_BIT);
+		if(should_reset_accum)
+		{
+			glClear(GL_COLOR_BUFFER_BIT);
+			should_reset_accum = false;
+			frame_counter = 0;
+		}
 		renderer.setBlendMode(Renderer::BlendMode::ADD);
 
 		renderer.bindShader(&shader);
@@ -237,9 +271,14 @@ int main()
 
 void randVec3(Renderer::Vec3<float>& _vec3)
 {
-	_vec3.x = dis(gen) * 2.f - 1.f;
-	_vec3.y = dis(gen) * 2.f - 1.f;
-	_vec3.z = dis(gen) * 2.f - 1.f;
+	//_vec3.x = dis(gen) * 2.f - 1.f;
+	//_vec3.y = dis(gen) * 2.f - 1.f;
+	//_vec3.z = dis(gen) * 2.f - 1.f;
+	float theta = dis(gen) * 3.14159265f * 2.f;
+	float phi = std::acos(2.f * dis(gen) - 1.f);
+	_vec3.x = std::sin(phi) * std::cos(theta);
+	_vec3.y = std::sin(phi) * std::sin(theta);
+	_vec3.z = std::cos(phi);
 
 	_vec3.normalize();
 }
