@@ -16,8 +16,8 @@
 //		shader must be bound when resizing window?
 //		vector and matrix *=, +=, etc
 
-#define WINDOW_WIDTH 800
-#define WINDOW_HEIGHT 600
+#define WINDOW_WIDTH 1024
+#define WINDOW_HEIGHT 768
 
 #define FOCAL_DISTANCE 400
 
@@ -42,6 +42,7 @@ int main()
 
 	Renderer::Window window;
 	window.init(WINDOW_WIDTH, WINDOW_HEIGHT, "Ray Tracing");
+	window.setVSync(false);
 
 	// create the renderer
 	Renderer::Render renderer;
@@ -56,14 +57,13 @@ int main()
 	shader.vertexAttribAdd(1, Renderer::AttribType::VEC2); // ray coordinate [-width/2, width/2], [-height / 2, height / 2]
 	shader.vertexAttribsEnable();
 	shader.uniformAdd("u_randTexture", Renderer::UniformType::INT);
-	shader.uniformAdd("u_randSampler", Renderer::UniformType::FLOAT);
+	shader.uniformAdd("u_randSampler", Renderer::UniformType::VEC2);
 	Renderer::Mat4<float> projection_matrix = Renderer::Math::projection2D(
 		0.f, static_cast<float>(WINDOW_WIDTH),
 		0.f, static_cast<float>(WINDOW_HEIGHT),
 		1.f, -1.f
 	);
 	shader.setUniformInt("u_randTexture", 0);
-	shader.setUniformFloat("u_randSampler", 0.f);
 
 	// create the shader to average each frame
 	Renderer::Shader accumShader;
@@ -106,7 +106,7 @@ int main()
 		rand_vec_data[i * 3 + 2] = static_cast<unsigned char>(rand_vector.z * 255);
 	}
 
-	float random_sampler = 0.f;
+	float random_sampler[] = {0.f, 0.f};
 
 	int frame_counter = 0;
 
@@ -126,9 +126,10 @@ int main()
 		auto elapsed_time = std::chrono::duration_cast<std::chrono::nanoseconds>(current_time - previous_time);
 		previous_time = current_time;
 		float dt = elapsed_time.count() * 1e-9;
-		//std::cout << 1.f / dt << "\n";
+		std::cout << 1.f / dt << "\n";
 
-		random_sampler = dis(gen) * WINDOW_WIDTH;
+		random_sampler[0] = dis(gen) * WINDOW_WIDTH;
+		random_sampler[1] = dis(gen) * WINDOW_HEIGHT;
 		frame_counter ++;
 		accumShader.setUniformFloat("u_frameCount", frame_counter);
 
@@ -141,6 +142,7 @@ int main()
 		renderer.bindShader(&shader);
 		random_vectors.bind(0);
 		renderer.bindTexture(&random_vectors);
+
 		shader.setUniformFloat("u_randSampler", random_sampler);
 		renderer.beginShape(Renderer::DrawType::TRIANGLE, 4, 0);
 

@@ -4,7 +4,7 @@ in vec2 v_texCoord;
 in vec2 v_rayCoord;
 
 uniform sampler2D u_randTexture;
-uniform float u_randSampler;
+uniform vec2 u_randSampler;
 
 out vec4 FragColor;
 
@@ -28,7 +28,7 @@ void main()
 	const int ray_bounce = 8;
 
 	// might be a better way to randomize
-	vec2 tex_coord = v_texCoord + vec2(u_randSampler, 0.f);
+	vec2 tex_coord = v_texCoord + u_randSampler;
 	vec4 rand_vec = texture(u_randTexture, tex_coord);
 	rand_vec = (rand_vec - vec4(0.5f)) * vec4(2.f);
 
