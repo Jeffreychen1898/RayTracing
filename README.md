@@ -1,6 +1,11 @@
 # Ray Tracing
 ## In the GPU (OpenGL Fragment Shader)
 
+# Todo
+- camera control
+- BRDF and material properties
+- bloom effect
+
 # Examples
 Note that the following examples were captured at different number of iterations therefore some might look smoother and cleaner than others.
 
