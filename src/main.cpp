@@ -17,56 +17,54 @@
 //		shader must be bound when resizing window?
 //		vector and matrix *=, +=, etc
 
-#define WINDOW_WIDTH 800
-#define WINDOW_HEIGHT 600
+#define WINDOW_WIDTH 1024.f
+#define WINDOW_HEIGHT 768.f
 
-#define FOCAL_DISTANCE 400
+// fov of 90 deg: focal distance = window width
+#define FOCAL_DISTANCE 1024.f
 
-static float camera_position[] = {0.f, 0.f, 0.f};
-static float camera_forward[] = {0.f, 0.f, -1.f};
-static float camera_up[] = {0.f, 1.f, 0.f};
-static bool should_reset_accum = false;
+#define SAMPLES_PER_FRAME 30
+
+#define PI 3.141592653589f
+
+// camera position
+static Renderer::Vec3<float> g_cameraPosition;
+static Renderer::Vec3<float> g_cameraForward;
+static Renderer::Vec3<float> g_cameraUp;
+static uint32_t g_rtAccumIncrementer;
+
+// controls
+static bool g_cameraShouldMove[6]; // up down left right forward backward
+static Renderer::Vec2<float> g_mousePos;
+static Renderer::Vec2<float> g_prevMousePos;
+static bool g_mousePressed;
+
+// sampler
+static Renderer::Vec2<float> g_randVecTexCoord;
 
 class WindowEvents : public Renderer::WindowEvents
 {
 	public:
-	Renderer::Shader* rt_shader;
-	void KeyPressed(int _key, int _scancode, int _mods) override
-	{
-		bool cam_changed = true;
-		if(_key == 87)
-			camera_position[1] += 0.1f;
-		else if(_key == 83)
-			camera_position[1] -= 0.1f;
-		else if(_key == 65)
-			camera_position[0] -= 0.1f;
-		else if(_key == 68)
-			camera_position[0] += 0.1f;
-		else
-			cam_changed = false;
 
-		if(cam_changed)
-			should_reset_accum = true;
-		rt_shader->setUniformFloat("u_cameraPosition", camera_position);
-		std::cout << _key << " pressed!\n";
-	}
-
-	void KeyReleased(int _key, int _scancode, int _mods) override
-	{
-		std::cout << _key << " released\n";
-	}
+		Renderer::Shader* rt_shader;
+		void KeyPressed(int _key, int _scancode, int _mods) override;
+		void KeyReleased(int _key, int _scancode, int _mods) override;
+		void MouseMove(double _x, double _y) override;
+		void MousePressed(int _button, int _mods) override;
+		void MouseReleased(int _button, int _mods) override;
 };
 
 static void randVec3(Renderer::Vec3<float>& _vec3);
 static void renderPerPixel(int _x, int _y, float &_red, float &_green, float &_blue);
-
-static std::vector<Sphere> scene_spheres;
-
-struct Ray
-{
-	Renderer::Vec3<float> origin;
-	Renderer::Vec3<float> direction;
-};
+static void update(float _dt);
+static void renderRT(Renderer::Render& _renderer);
+static void renderAccum(Renderer::Render& _renderer);
+static void initVariables();
+static void initWindow(Renderer::Window& _window);
+static void initRTShader(Renderer::Shader& _shader);
+static void initAccumShader(Renderer::Shader& _shader);
+static void createAccumFBO(unsigned int& _framebuffer, unsigned int& _texture);
+static void getRandVecTexture(Renderer::Texture& _texture, Renderer::Window& _window);
 
 static std::random_device rd;
 static std::mt19937 gen(rd());
@@ -74,70 +72,174 @@ static std::uniform_real_distribution<float> dis(0.f, 1.f);
 
 int main()
 {
+	initVariables();
 	Renderer::Window::GLFWInit();
 
-	WindowEvents* win_evt = new WindowEvents;
+	// create the window
 	Renderer::Window window;
-	window.init(WINDOW_WIDTH, WINDOW_HEIGHT, "Ray Tracing");
-	window.addEvents(win_evt);
-	window.setVSync(false);
+	initWindow(window);
 
 	// create the renderer
 	Renderer::Render renderer;
 	renderer.attach(&window);
 	renderer.init();
 
-	// create the shader
-	Renderer::Shader shader(true);
-	win_evt->rt_shader = &shader;
+	// create the rt shader
+	Renderer::Shader shader;
 	shader.attach(&window);
-	shader.createFromFile("res/basic.vert", "res/basic.frag", true);
-	shader.vertexAttribAdd(0, Renderer::AttribType::VEC2); // position
-	shader.vertexAttribAdd(1, Renderer::AttribType::VEC2); // ray coordinate [-width/2, width/2], [-height / 2, height / 2]
-	shader.vertexAttribsEnable();
-	shader.uniformAdd("u_randTexture", Renderer::UniformType::INT);
-	shader.uniformAdd("u_randSampler", Renderer::UniformType::VEC2);
-	shader.uniformAdd("u_cameraPosition", Renderer::UniformType::VEC3);
-	shader.uniformAdd("u_cameraForward", Renderer::UniformType::VEC3);
-	shader.uniformAdd("u_cameraUp", Renderer::UniformType::VEC3);
-	Renderer::Mat4<float> projection_matrix = Renderer::Math::projection2D(
-		0.f, static_cast<float>(WINDOW_WIDTH),
-		0.f, static_cast<float>(WINDOW_HEIGHT),
-		1.f, -1.f
-	);
-	shader.setUniformInt("u_randTexture", 0);
-	shader.setUniformFloat("u_cameraPosition", camera_position);
-	shader.setUniformFloat("u_cameraForward", camera_forward);
-	shader.setUniformFloat("u_cameraUp", camera_up);
+	initRTShader(shader);
 
 	// create the shader to average each frame
-	Renderer::Shader accumShader(true);
+	Renderer::Shader accumShader;
 	accumShader.attach(&window);
-	accumShader.createFromFile("res/average.vert", "res/average.frag", true);
-	accumShader.vertexAttribAdd(0, Renderer::AttribType::VEC2);
-	accumShader.vertexAttribAdd(1, Renderer::AttribType::VEC2);
-	accumShader.vertexAttribsEnable();
-	accumShader.uniformAdd("u_accumTexture", Renderer::UniformType::INT);
-	accumShader.uniformAdd("u_frameCount", Renderer::UniformType::FLOAT);
-	accumShader.setUniformInt("u_accumTexture", 0);
+	initAccumShader(accumShader);
 
 	// create the frame buffer for accumulation
 	unsigned int accum_fbo;
-	glGenFramebuffers(1, &accum_fbo);
-	glBindFramebuffer(GL_FRAMEBUFFER, accum_fbo);
+	unsigned int accum_fbo_tex;
+	createAccumFBO(accum_fbo, accum_fbo_tex);
 
-	GLuint accum_fbo_tex;
-    glGenTextures(1, &accum_fbo_tex);
-    glBindTexture(GL_TEXTURE_2D, accum_fbo_tex);
+	// create the random normal vector texture
+	Renderer::Texture random_vectors(8);
+	getRandVecTexture(random_vectors, window);
+
+	auto previous_time = std::chrono::high_resolution_clock::now();
+
+	unsigned int iteration = 0;
+
+	while(window.isOpened())
+	{
+		// calculate the fps
+		auto current_time = std::chrono::high_resolution_clock::now();
+		auto elapsed_time = std::chrono::duration_cast<std::chrono::nanoseconds>(current_time - previous_time);
+		previous_time = current_time;
+		float dt = elapsed_time.count() * 1e-9;
+		std::cout << 1.f / dt << "\n";
+
+		update(dt);
+
+		// render pass: ray tracing
+		glBindFramebuffer(GL_FRAMEBUFFER, accum_fbo);
+		glViewport(0, 0, WINDOW_WIDTH, WINDOW_HEIGHT);
+
+		renderer.setBlendMode(Renderer::BlendMode::ADD);
+
+		random_vectors.bind(0);
+		renderer.bindShader(&shader);
+
+		if(g_rtAccumIncrementer == 0)
+		{
+			glClear(GL_COLOR_BUFFER_BIT);
+			shader.setUniformFloat("u_cameraPosition", *g_cameraPosition);
+			shader.setUniformFloat("u_cameraForward", *g_cameraForward);
+			shader.setUniformFloat("u_cameraUp", *g_cameraUp);
+		}
+
+		for(int32_t i=0;i<SAMPLES_PER_FRAME;++i)
+		{
+			// sample tex coord for the texture
+			g_randVecTexCoord.x = dis(gen);
+			g_randVecTexCoord.y = dis(gen);
+			shader.setUniformFloat("u_randSampler", *g_randVecTexCoord);
+
+			renderRT(renderer);
+			renderer.render();
+			++ g_rtAccumIncrementer;
+		}
+
+		// render pass: accumulation (average the colors)
+		glBindFramebuffer(GL_FRAMEBUFFER, 0);
+		glViewport(0, 0, WINDOW_WIDTH * 2.f, WINDOW_HEIGHT * 2.f);
+		glClear(GL_COLOR_BUFFER_BIT);
+
+		renderer.setBlendMode(Renderer::BlendMode::BLEND);
+
+		renderer.bindShader(&accumShader);
+		glBindTexture(GL_TEXTURE_2D, accum_fbo_tex);
+
+		accumShader.setUniformFloat("u_frameCount", g_rtAccumIncrementer);
+
+		renderAccum(renderer);
+		renderer.render();
+
+		window.swapBuffers();
+		Renderer::Window::pollEvents();
+	}
+
+	glDeleteTextures(1, &accum_fbo_tex);
+	glDeleteFramebuffers(1, &accum_fbo);
+
+	return 0;
+}
+
+void initVariables()
+{
+	g_rtAccumIncrementer = 0;
+
+	g_cameraPosition.x = 0.f;
+	g_cameraPosition.y = 0.f;
+	g_cameraPosition.z = 0.f;
+
+	g_cameraForward.x = 0.f;
+	g_cameraForward.y = 0.f;
+	g_cameraForward.z = -1.f;
+
+	g_cameraUp.x = 0.f;
+	g_cameraUp.y = 1.f;
+	g_cameraUp.z = 0.f;
+
+	g_randVecTexCoord.x = 0.f;
+	g_randVecTexCoord.y = 0.f;
+}
+
+void initRTShader(Renderer::Shader& _shader)
+{
+	_shader.createFromFile("res/basic.vert", "res/basic.frag", true);
+	_shader.vertexAttribAdd(0, Renderer::AttribType::VEC2); // position
+	_shader.vertexAttribAdd(1, Renderer::AttribType::VEC2); // ray coordinate [-width/2, width/2], [-height / 2, height / 2]
+	_shader.vertexAttribsEnable();
+	_shader.uniformAdd("u_randTexture", Renderer::UniformType::INT);
+	_shader.uniformAdd("u_randSampler", Renderer::UniformType::VEC2);
+	_shader.uniformAdd("u_cameraPosition", Renderer::UniformType::VEC3);
+	_shader.uniformAdd("u_cameraForward", Renderer::UniformType::VEC3);
+	_shader.uniformAdd("u_cameraUp", Renderer::UniformType::VEC3);
+	_shader.uniformAdd("u_focalDistance", Renderer::UniformType::FLOAT);
+	_shader.setUniformInt("u_randTexture", 0);
+	_shader.setUniformFloat("u_cameraPosition", *g_cameraPosition);
+	_shader.setUniformFloat("u_cameraForward", *g_cameraForward);
+	_shader.setUniformFloat("u_cameraUp", *g_cameraUp);
+	_shader.setUniformFloat("u_focalDistance", FOCAL_DISTANCE);
+}
+
+void initAccumShader(Renderer::Shader& _shader)
+{
+	_shader.createFromFile("res/average.vert", "res/average.frag", true);
+	_shader.vertexAttribAdd(0, Renderer::AttribType::VEC2);
+	_shader.vertexAttribAdd(1, Renderer::AttribType::VEC2);
+	_shader.vertexAttribsEnable();
+	_shader.uniformAdd("u_accumTexture", Renderer::UniformType::INT);
+	_shader.uniformAdd("u_frameCount", Renderer::UniformType::FLOAT);
+	_shader.setUniformInt("u_accumTexture", 0);
+}
+
+void createAccumFBO(unsigned int& _framebuffer, unsigned int& _texture)
+{
+	glGenFramebuffers(1, &_framebuffer);
+	glBindFramebuffer(GL_FRAMEBUFFER, _framebuffer);
+
+    glGenTextures(1, &_texture);
+    glBindTexture(GL_TEXTURE_2D, _texture);
     glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB32F, WINDOW_WIDTH, WINDOW_HEIGHT, 0, GL_RGB, GL_UNSIGNED_BYTE, nullptr);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 
-	glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, accum_fbo_tex, 0);
+	glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, _texture, 0);
 
 	glBindFramebuffer(GL_FRAMEBUFFER, 0);
+}
 
-	// create the random normal vector texture
+void getRandVecTexture(Renderer::Texture& _texture, Renderer::Window& _window)
+{
 	unsigned char* rand_vec_data = new unsigned char[WINDOW_WIDTH * WINDOW_HEIGHT * 3];
 	for(unsigned int i=0;i<WINDOW_WIDTH * WINDOW_HEIGHT;++i)
 	{
@@ -151,129 +253,125 @@ int main()
 		rand_vec_data[i * 3 + 2] = static_cast<unsigned char>(rand_vector.z * 255);
 	}
 
-	float random_sampler[] = {0.f, 0.f};
-
-	int frame_counter = 0;
-
-	Renderer::Texture random_vectors(8);
-	random_vectors.setTextureFilter(GL_NEAREST, GL_NEAREST);
-	random_vectors.setTextureWrap(GL_REPEAT, GL_REPEAT);
-	random_vectors.create(&window, WINDOW_WIDTH, WINDOW_HEIGHT, 3, rand_vec_data);
+	_texture.setTextureFilter(GL_NEAREST, GL_NEAREST);
+	_texture.setTextureWrap(GL_REPEAT, GL_REPEAT);
+	_texture.create(&_window, WINDOW_WIDTH, WINDOW_HEIGHT, 3, rand_vec_data);
 	delete[] rand_vec_data;
 
-	auto previous_time = std::chrono::high_resolution_clock::now();
+}
 
-	unsigned int iteration = 0;
+void initWindow(Renderer::Window& _window)
+{
+	WindowEvents* win_evt = new WindowEvents;
 
-	auto unique_samples = new std::unordered_set<uint64_t>();
+	_window.init(WINDOW_WIDTH, WINDOW_HEIGHT, "Ray Tracing");
+	_window.addEvents(win_evt);
+	_window.setVSync(false);
+}
 
-	while(window.isOpened())
+void renderRT(Renderer::Render& _renderer)
+{
+	_renderer.beginShape(Renderer::DrawType::TRIANGLE, 4, 0);
+
+	_renderer.vertex2f(-1.f, 1.f);
+	_renderer.vertex2f(-WINDOW_WIDTH / 2.f, WINDOW_HEIGHT / 2.f);
+
+	_renderer.nextVertex();
+	
+	_renderer.vertex2f(1.f, 1.f);
+	_renderer.vertex2f( WINDOW_WIDTH / 2.f, WINDOW_HEIGHT / 2.f);
+
+	_renderer.nextVertex();
+
+	_renderer.vertex2f(1.f, -1.f);
+	_renderer.vertex2f(WINDOW_WIDTH / 2.f, -WINDOW_HEIGHT / 2.f);
+
+	_renderer.nextVertex();
+
+	_renderer.vertex2f(-1.f, -1.f);
+	_renderer.vertex2f(-WINDOW_WIDTH / 2.f, -WINDOW_HEIGHT / 2.f);
+
+	_renderer.endShape();
+}
+
+void renderAccum(Renderer::Render& _renderer)
+{
+	_renderer.beginShape(Renderer::DrawType::TRIANGLE, 4, 0);
+
+	_renderer.vertex2f(-1.f, 1.f);
+	_renderer.vertex2f(0.f, 1.f);
+
+	_renderer.nextVertex();
+
+	_renderer.vertex2f(1.f, 1.f);
+	_renderer.vertex2f(1.f, 1.f);
+
+	_renderer.nextVertex();
+
+	_renderer.vertex2f(1.f, -1.f);
+	_renderer.vertex2f(1.f, 0.f);
+
+	_renderer.nextVertex();
+
+	_renderer.vertex2f(-1.f, -1.f);
+	_renderer.vertex2f(0.f, 0.f);
+
+	_renderer.endShape();
+}
+
+void update(float _dt)
+{
+	// code to move camera position
+	
+	Renderer::Vec3<float> camera_right = g_cameraForward.cross(g_cameraUp);
+	Renderer::Vec3<float> camera_forward = g_cameraUp.cross(camera_right);
+	if(g_cameraShouldMove[0]) // move up
 	{
-		renderer.bindTexture(&random_vectors);
-		// calculate the fps
-		auto current_time = std::chrono::high_resolution_clock::now();
-		auto elapsed_time = std::chrono::duration_cast<std::chrono::nanoseconds>(current_time - previous_time);
-		previous_time = current_time;
-		float dt = elapsed_time.count() * 1e-9;
-		//std::cout << 1.f / dt << "\n";
-
-		random_sampler[0] = dis(gen);
-		random_sampler[1] = dis(gen);
-		frame_counter ++;
-		accumShader.setUniformFloat("u_frameCount", frame_counter);
-
-		// calculate the number of unique samples
-		unsigned int displace_x = static_cast<uint32_t>(random_sampler[0] * WINDOW_WIDTH);
-		unsigned int displace_y = static_cast<uint32_t>(random_sampler[1] * WINDOW_HEIGHT);
-		uint64_t store_displace = displace_x;
-		store_displace = store_displace << 32;
-		store_displace |= displace_y;
-		if(unique_samples->find(store_displace) == unique_samples->end())
-			unique_samples->insert(store_displace);
-
-		//std::cout << "unique random samples: " << unique_samples->size() << " / " << ++iteration << std::endl;
-
-		// clear buffer
-		glBindFramebuffer(GL_FRAMEBUFFER, accum_fbo);
-		glViewport(0, 0, WINDOW_WIDTH, WINDOW_HEIGHT);
-		if(should_reset_accum)
-		{
-			glClear(GL_COLOR_BUFFER_BIT);
-			should_reset_accum = false;
-			frame_counter = 0;
-		}
-		renderer.setBlendMode(Renderer::BlendMode::ADD);
-
-		renderer.bindShader(&shader);
-		random_vectors.bind(0);
-		renderer.bindTexture(&random_vectors);
-
-		shader.setUniformFloat("u_randSampler", random_sampler);
-		renderer.beginShape(Renderer::DrawType::TRIANGLE, 4, 0);
-
-		renderer.vertex2f(-1.f, 1.f);
-		renderer.vertex2f(-WINDOW_WIDTH / 2.f, WINDOW_HEIGHT / 2.f);
-
-		renderer.nextVertex();
-		
-		renderer.vertex2f(1.f, 1.f);
-		renderer.vertex2f( WINDOW_WIDTH / 2.f, WINDOW_HEIGHT / 2.f);
-
-		renderer.nextVertex();
-
-		renderer.vertex2f(1.f, -1.f);
-		renderer.vertex2f(WINDOW_WIDTH / 2.f, -WINDOW_HEIGHT / 2.f);
-
-		renderer.nextVertex();
-
-		renderer.vertex2f(-1.f, -1.f);
-		renderer.vertex2f(-WINDOW_WIDTH / 2.f, -WINDOW_HEIGHT / 2.f);
-
-		renderer.endShape();
-
-		renderer.render();
-
-		glBindFramebuffer(GL_FRAMEBUFFER, 0);
-		glViewport(0, 0, WINDOW_WIDTH * 2.f, WINDOW_HEIGHT * 2.f);
-
-		renderer.setBlendMode(Renderer::BlendMode::BLEND);
-		glClear(GL_COLOR_BUFFER_BIT);
-
-		renderer.bindShader(&accumShader);
-		glBindTexture(GL_TEXTURE_2D, accum_fbo_tex);
-		renderer.beginShape(Renderer::DrawType::TRIANGLE, 4, 0);
-		renderer.vertex2f(-1.f, 1.f);
-		renderer.vertex2f(0.f, 1.f);
-		renderer.nextVertex();
-		renderer.vertex2f(1.f, 1.f);
-		renderer.vertex2f(1.f, 1.f);
-		renderer.nextVertex();
-		renderer.vertex2f(1.f, -1.f);
-		renderer.vertex2f(1.f, 0.f);
-		renderer.nextVertex();
-		renderer.vertex2f(-1.f, -1.f);
-		renderer.vertex2f(0.f, 0.f);
-		renderer.endShape();
-		
-		renderer.render();
-
-		window.swapBuffers();
-		Renderer::Window::pollEvents();
+		g_cameraPosition = g_cameraPosition + g_cameraUp * (2.f * _dt);
+		g_rtAccumIncrementer = 0;
+	}
+	if(g_cameraShouldMove[1]) // move down
+	{
+		g_cameraPosition = g_cameraPosition - g_cameraUp * (2.f * _dt);
+		g_rtAccumIncrementer = 0;
+	}
+	if(g_cameraShouldMove[2]) // move left
+	{
+		g_cameraPosition = g_cameraPosition - camera_right * (2.f * _dt);
+		g_rtAccumIncrementer = 0;
+	}
+	if(g_cameraShouldMove[3]) // move right
+	{
+		g_cameraPosition = g_cameraPosition + camera_right * (2.f * _dt);
+		g_rtAccumIncrementer = 0;
+	}
+	if(g_cameraShouldMove[4]) // move forward
+	{
+		g_cameraPosition = g_cameraPosition + camera_forward * (2.f * _dt);
+		g_rtAccumIncrementer = 0;
+	}
+	if(g_cameraShouldMove[5]) // move backward
+	{
+		g_cameraPosition = g_cameraPosition - camera_forward * (2.f * _dt);
+		g_rtAccumIncrementer = 0;
 	}
 
-	delete unique_samples;
+	if(g_mousePressed && g_prevMousePos != g_mousePos) // mouse drag for rotation
+	{
+		float one_over_focal_dist = 1.f / FOCAL_DISTANCE;
+		Renderer::Vec2<float> diff = (g_mousePos - g_prevMousePos) * one_over_focal_dist;
 
-	glDeleteTextures(1, &accum_fbo_tex);
-	glDeleteFramebuffers(1, &accum_fbo);
+		g_cameraForward = g_cameraForward + camera_right * -diff.x + g_cameraUp * diff.y;
+		g_cameraForward.normalize();
 
-	return 0;
+		g_rtAccumIncrementer = 0;
+	}
+
+	g_prevMousePos = g_mousePos;
 }
 
 void randVec3(Renderer::Vec3<float>& _vec3)
 {
-	//_vec3.x = dis(gen) * 2.f - 1.f;
-	//_vec3.y = dis(gen) * 2.f - 1.f;
-	//_vec3.z = dis(gen) * 2.f - 1.f;
 	float theta = dis(gen) * 3.14159265f * 2.f;
 	float phi = std::acos(2.f * dis(gen) - 1.f);
 	_vec3.x = std::sin(phi) * std::cos(theta);
@@ -281,4 +379,72 @@ void randVec3(Renderer::Vec3<float>& _vec3)
 	_vec3.z = std::cos(phi);
 
 	_vec3.normalize();
+}
+
+void WindowEvents::KeyPressed(int _key, int _scancode, int _mods)
+{
+	switch(_key)
+	{
+		case 87: // W
+			g_cameraShouldMove[4] = true;
+			break;
+		case 83: // S
+			g_cameraShouldMove[5] = true;
+			break;
+		case 65: // A
+			g_cameraShouldMove[2] = true;
+			break;
+		case 68: // D
+			g_cameraShouldMove[3] = true;
+			break;
+		case 81: // Q
+			g_cameraShouldMove[1] = true;
+			break;
+		case 69: // E
+			g_cameraShouldMove[0] = true;
+			break;
+	}
+}
+
+void WindowEvents::KeyReleased(int _key, int _scancode, int _mods)
+{
+	switch(_key)
+	{
+		case 87: // W
+			g_cameraShouldMove[4] = false;
+			break;
+		case 83: // S
+			g_cameraShouldMove[5] = false;
+			break;
+		case 65: // A
+			g_cameraShouldMove[2] = false;
+			break;
+		case 68: // D
+			g_cameraShouldMove[3] = false;
+			break;
+		case 81: // Q
+			g_cameraShouldMove[1] = false;
+			break;
+		case 69: // E
+			g_cameraShouldMove[0] = false;
+			break;
+	}
+}
+
+void WindowEvents::MouseMove(double _x, double _y)
+{
+	g_mousePos.x = _x;
+	g_mousePos.y = _y;
+}
+
+void WindowEvents::MousePressed(int _button, int _mods)
+{
+	if(_button == GLFW_MOUSE_BUTTON_LEFT)
+		g_mousePressed = true;
+}
+
+void WindowEvents::MouseReleased(int _button, int _mods)
+{
+	if(_button == GLFW_MOUSE_BUTTON_LEFT)
+		g_mousePressed = false;
 }

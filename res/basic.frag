@@ -9,15 +9,12 @@ uniform vec2 u_randSampler;
 uniform vec3 u_cameraPosition;
 uniform vec3 u_cameraForward;
 uniform vec3 u_cameraUp;
+uniform float u_focalDistance;
 
 out vec4 FragColor;
 
 void main()
 {
-	float window_width = 800.f;
-	float window_height = 600.f;
-	float focal_distance = 400.f;
-
 	const int sphere_count = 4;
 	const int ray_bounce = 10;
 
@@ -31,10 +28,12 @@ void main()
 	vec3 color[sphere_count] = vec3[](vec3(1.f, 0.5f, 0.5f), vec3(0.5f, 0.5f, 1.f), vec3(0.9f, 0.9f, 0.3f), vec3(0.48f, 0.38f, 0.57f));
 	float brightness[sphere_count] = float[](0.f, 0.f, 10.f, 500.f);
 
+	vec3 camera_forward = normalize(u_cameraForward);
+	vec3 camera_right = cross(camera_forward, normalize(u_cameraUp));
+	vec3 camera_up = cross(camera_right, camera_forward);
+
 	vec3 ray_origin = u_cameraPosition;
-	//vec3 ray_direction = vec3(v_rayCoord.x, v_rayCoord.y, focal_distance);
-	vec3 camera_right = cross(u_cameraForward, u_cameraUp);
-	vec3 ray_direction = focal_distance * u_cameraForward + v_rayCoord.x * camera_right + v_rayCoord.y * u_cameraUp;
+	vec3 ray_direction = u_focalDistance * camera_forward + v_rayCoord.x * camera_right + v_rayCoord.y * camera_up;
 
 	vec3 absorb_col = vec3(1.f);
 	vec3 light_col = vec3(0.f);

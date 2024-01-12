@@ -4,6 +4,7 @@
 # Todo
 - camera control
 - BRDF and material properties
+- Apply OIDN for denoising
 - bloom effect
 
 # Examples
