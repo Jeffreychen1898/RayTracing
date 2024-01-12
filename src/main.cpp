@@ -3,6 +3,7 @@
 #include <cmath>
 #include <random>
 #include <cfloat>
+#include <unordered_set>
 
 #include <renderer/Renderer.hpp>
 
@@ -118,6 +119,10 @@ int main()
 
 	auto previous_time = std::chrono::high_resolution_clock::now();
 
+	unsigned int iteration = 0;
+
+	auto unique_samples = new std::unordered_set<uint64_t>();
+
 	while(window.isOpened())
 	{
 		renderer.bindTexture(&random_vectors);
@@ -128,10 +133,21 @@ int main()
 		float dt = elapsed_time.count() * 1e-9;
 		std::cout << 1.f / dt << "\n";
 
-		random_sampler[0] = dis(gen) * WINDOW_WIDTH;
-		random_sampler[1] = dis(gen) * WINDOW_HEIGHT;
+		random_sampler[0] = dis(gen);
+		random_sampler[1] = dis(gen);
 		frame_counter ++;
 		accumShader.setUniformFloat("u_frameCount", frame_counter);
+
+		// calculate the number of unique samples
+		unsigned int displace_x = static_cast<uint32_t>(random_sampler[0] * WINDOW_WIDTH);
+		unsigned int displace_y = static_cast<uint32_t>(random_sampler[1] * WINDOW_HEIGHT);
+		uint64_t store_displace = displace_x;
+		store_displace = store_displace << 32;
+		store_displace |= displace_y;
+		if(unique_samples->find(store_displace) == unique_samples->end())
+			unique_samples->insert(store_displace);
+
+		std::cout << "unique random samples: " << unique_samples->size() << " / " << ++iteration << std::endl;
 
 		// clear buffer
 		glBindFramebuffer(GL_FRAMEBUFFER, accum_fbo);
@@ -195,6 +211,8 @@ int main()
 		window.swapBuffers();
 		Renderer::Window::pollEvents();
 	}
+
+	delete unique_samples;
 
 	glDeleteTextures(1, &accum_fbo_tex);
 	glDeleteFramebuffers(1, &accum_fbo);

@@ -25,17 +25,17 @@ void main()
 	float focal_distance = -400.f;
 
 	const int sphere_count = 4;
-	const int ray_bounce = 8;
+	const int ray_bounce = 3;
 
 	// might be a better way to randomize
 	vec2 tex_coord = v_texCoord + u_randSampler;
 	vec4 rand_vec = texture(u_randTexture, tex_coord);
 	rand_vec = (rand_vec - vec4(0.5f)) * vec4(2.f);
 
-	float radius[sphere_count] = float[](0.5f, 10.f, 0.4f, 0.3f);
-	vec3 positions[sphere_count] = vec3[](vec3(0.f, -0.7f, -4.f), vec3(0.f, -11.f, -2.f), vec3(2.f, 0.f, -3.f), vec3(2.f, 0.f, -5.f));
-	vec3 color[sphere_count] = vec3[](vec3(1.f, 0.5f, 0.5f), vec3(0.5f, 0.5f, 1.f), vec3(0.9f, 0.9f, 0.9f), vec3(0.48f, 0.38f, 0.57f));
-	float brightness[sphere_count] = float[](0.f, 0.f, 20.f, 0.f);
+	float radius[sphere_count] = float[](0.5f, 100.f, 80.f, 0.1f);
+	vec3 positions[sphere_count] = vec3[](vec3(0.f, -2.7f, -5.f), vec3(0.f, -103.f, -5.f), vec3(100.f, 80.f, -100.f), vec3(-0.8f, -1.7f, -4.f));
+	vec3 color[sphere_count] = vec3[](vec3(1.f, 0.5f, 0.5f), vec3(0.5f, 0.5f, 1.f), vec3(0.9f, 0.9f, 0.3f), vec3(0.48f, 0.38f, 0.57f));
+	float brightness[sphere_count] = float[](0.f, 0.f, 7.f, 500.f);
 
 	vec3 ray_origin = vec3(0.f, 0.f, 0.f);
 	vec3 ray_direction = vec3(v_rayCoord.x, v_rayCoord.y, focal_distance);
@@ -70,7 +70,7 @@ void main()
 		{
 			// ensure absorb color is between 0 and 1, no idea why code breaks when i remove this.
 			absorb_col = clamp(absorb_col, vec3(0.f), vec3(1.f));
-			//light_col += vec3(0.627f, 1.f, 1.f) * absorb_col;
+			//light_col += vec3(0.627f, 1.f, 1.f) * vec3(0.3) * absorb_col;
 			light_col += vec3(0.f);
 			break;
 		}
@@ -80,7 +80,6 @@ void main()
 		vec3 incident_vector = normalize(-ray_direction);
 
 		ray_origin = surface + normal * 0.00000000001f;
-		//ray_direction = refl(incident_vector, normal);
 		ray_direction = normal + rand_vec.xyz;
 
 		if(brightness[idx] > 0.f)
