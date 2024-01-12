@@ -7,8 +7,6 @@
 
 #include <renderer/Renderer.hpp>
 
-#include "Scene.hpp"
-
 // renderer todo:
 //		renderer.clear()
 //		renderer throw exception on too large of a shape

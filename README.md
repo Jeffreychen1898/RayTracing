@@ -2,7 +2,7 @@
 ## In the GPU (OpenGL Fragment Shader)
 
 # Todo
-- camera control
+- Store objects in texture (objects should be defined on CPU)
 - BRDF and material properties
 - Apply OIDN for denoising
 - bloom effect
