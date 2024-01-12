@@ -11,10 +11,10 @@
 
 ![example 1](README_res/example1.png)
 
-![example 2](readme_res/example2.png)
+![example 2](README_res/example2.png)
 
-![example 3](readme_res/example3.png)
+![example 3](README_res/example3.png)
 
-![example 4](readme_res/example4.png)
+![example 4](README_res/example4.png)
 
-![example 5](readme_res/example5.png)
+![example 5](README_res/example5.png)
