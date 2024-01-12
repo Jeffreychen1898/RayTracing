@@ -22,6 +22,19 @@
 
 #define FOCAL_DISTANCE 400
 
+class WindowEvents : public Renderer::WindowEvents
+{
+	void KeyPressed(int _key, int _scancode, int _mods) override
+	{
+		std::cout << _key << " pressed!\n";
+	}
+
+	void KeyReleased(int _key, int _scancode, int _mods) override
+	{
+		std::cout << _key << " released\n";
+	}
+};
+
 static void randVec3(Renderer::Vec3<float>& _vec3);
 static void renderPerPixel(int _x, int _y, float &_red, float &_green, float &_blue);
 
@@ -41,8 +54,10 @@ int main()
 {
 	Renderer::Window::GLFWInit();
 
+	WindowEvents* win_evt = new WindowEvents;
 	Renderer::Window window;
 	window.init(WINDOW_WIDTH, WINDOW_HEIGHT, "Ray Tracing");
+	window.addEvents(win_evt);
 	window.setVSync(false);
 
 	// create the renderer
@@ -131,7 +146,7 @@ int main()
 		auto elapsed_time = std::chrono::duration_cast<std::chrono::nanoseconds>(current_time - previous_time);
 		previous_time = current_time;
 		float dt = elapsed_time.count() * 1e-9;
-		std::cout << 1.f / dt << "\n";
+		//std::cout << 1.f / dt << "\n";
 
 		random_sampler[0] = dis(gen);
 		random_sampler[1] = dis(gen);
@@ -147,7 +162,7 @@ int main()
 		if(unique_samples->find(store_displace) == unique_samples->end())
 			unique_samples->insert(store_displace);
 
-		std::cout << "unique random samples: " << unique_samples->size() << " / " << ++iteration << std::endl;
+		//std::cout << "unique random samples: " << unique_samples->size() << " / " << ++iteration << std::endl;
 
 		// clear buffer
 		glBindFramebuffer(GL_FRAMEBUFFER, accum_fbo);

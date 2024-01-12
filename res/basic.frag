@@ -8,16 +8,6 @@ uniform vec2 u_randSampler;
 
 out vec4 FragColor;
 
-vec3 proj(vec3 _vec, vec3 _on)
-{
-	return dot(_vec, _on) / dot(_on, _on) * _on;
-}
-
-vec3 refl(vec3 _vec, vec3 _against)
-{
-	return 2 * proj(_vec, _against) - _vec;
-}
-
 void main()
 {
 	float window_width = 800.f;
@@ -68,8 +58,6 @@ void main()
 
 		if(idx < 0)
 		{
-			// ensure absorb color is between 0 and 1, no idea why code breaks when i remove this.
-			absorb_col = clamp(absorb_col, vec3(0.f), vec3(1.f));
 			//light_col += vec3(0.627f, 1.f, 1.f) * vec3(0.3) * absorb_col;
 			light_col += vec3(0.f);
 			break;
@@ -80,7 +68,8 @@ void main()
 		vec3 incident_vector = normalize(-ray_direction);
 
 		ray_origin = surface + normal * 0.00000000001f;
-		ray_direction = normal + rand_vec.xyz;
+		//ray_direction = normal + rand_vec.xyz * 0.99f;
+		ray_direction = reflect(incident_vector, normal);
 
 		if(brightness[idx] > 0.f)
 		{
