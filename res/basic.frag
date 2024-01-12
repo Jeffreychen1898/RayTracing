@@ -23,10 +23,10 @@ void main()
 	vec4 rand_vec = texture(u_randTexture, tex_coord);
 	rand_vec = (rand_vec - vec4(0.5f)) * vec4(2.f);
 
-	float radius[sphere_count] = float[](0.5f, 100.f, 80.f, 0.1f);
-	vec3 positions[sphere_count] = vec3[](vec3(0.f, -2.f, -5.f), vec3(0.f, -103.f, -5.f), vec3(100.f, 80.f, -100.f), vec3(-0.8f, -1.7f, -4.f));
-	vec3 color[sphere_count] = vec3[](vec3(1.f, 0.5f, 0.5f), vec3(0.5f, 0.5f, 1.f), vec3(0.9f, 0.9f, 0.3f), vec3(0.48f, 0.38f, 0.57f));
-	float brightness[sphere_count] = float[](0.f, 0.f, 10.f, 500.f);
+	float radius[sphere_count] = float[](0.5f, 30.f, 10.f, 0.5f);
+	vec3 positions[sphere_count] = vec3[](vec3(0.f, -2.7f, -5.f), vec3(0.f, -33.f, -5.f), vec3(20.f, 5.f, -5.f), vec3(4.f, -2.5f, -20.f));
+	vec3 color[sphere_count] = vec3[](vec3(1.f, 0.5f, 0.5f), vec3(0.5f, 0.5f, 1.f), vec3(1.f, 1.f, 1.f), vec3(0.48f, 0.38f, 0.57f));
+	float brightness[sphere_count] = float[](0.f, 0.f, 5.f, 0.f);
 
 	vec3 camera_forward = normalize(u_cameraForward);
 	vec3 camera_right = cross(camera_forward, normalize(u_cameraUp));
@@ -63,8 +63,8 @@ void main()
 
 		if(idx < 0)
 		{
-			//light_col += vec3(0.627f, 1.f, 1.f) * vec3(0.3) * absorb_col;
-			light_col += vec3(0.f);
+			light_col += vec3(0.627f, 1.f, 1.f) * absorb_col;
+			//light_col += vec3(0.f);
 			break;
 		}
 
