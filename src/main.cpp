@@ -21,7 +21,7 @@
 // fov of 90 deg: focal distance = window width
 #define FOCAL_DISTANCE 1024.f
 
-#define SAMPLES_PER_FRAME 30
+#define SAMPLES_PER_FRAME 5
 
 #define PI 3.141592653589f
 
@@ -29,7 +29,7 @@
 static Renderer::Vec3<float> g_cameraPosition;
 static Renderer::Vec3<float> g_cameraForward;
 static Renderer::Vec3<float> g_cameraUp;
-static uint32_t g_rtAccumIncrementer;
+static bool g_rtAccumReset;
 
 // controls
 static bool g_cameraShouldMove[6]; // up down left right forward backward
@@ -82,6 +82,10 @@ int main()
 	renderer.attach(&window);
 	renderer.init();
 
+	// enable multiple frame buffers
+	GLenum draw_buffers[] = {GL_COLOR_ATTACHMENT0, GL_COLOR_ATTACHMENT1};
+	glDrawBuffers(2, draw_buffers);
+
 	// create the rt shader
 	Renderer::Shader shader;
 	shader.attach(&window);
@@ -120,17 +124,19 @@ int main()
 		glBindFramebuffer(GL_FRAMEBUFFER, accum_fbo);
 		glViewport(0, 0, WINDOW_WIDTH, WINDOW_HEIGHT);
 
-		renderer.setBlendMode(Renderer::BlendMode::ADD);
+		glBlendFunc(GL_ONE, GL_ONE);
 
 		random_vectors.bind(0);
 		renderer.bindShader(&shader);
 
-		if(g_rtAccumIncrementer == 0)
+		if(g_rtAccumReset)
 		{
 			glClear(GL_COLOR_BUFFER_BIT);
 			shader.setUniformFloat("u_cameraPosition", *g_cameraPosition);
 			shader.setUniformFloat("u_cameraForward", *g_cameraForward);
 			shader.setUniformFloat("u_cameraUp", *g_cameraUp);
+
+			g_rtAccumReset = false;
 		}
 
 		for(int32_t i=0;i<SAMPLES_PER_FRAME;++i)
@@ -142,7 +148,6 @@ int main()
 
 			renderRT(renderer);
 			renderer.render();
-			++ g_rtAccumIncrementer;
 		}
 
 		// render pass: accumulation (average the colors)
@@ -154,8 +159,6 @@ int main()
 
 		renderer.bindShader(&accumShader);
 		glBindTexture(GL_TEXTURE_2D, accum_fbo_tex);
-
-		accumShader.setUniformFloat("u_frameCount", g_rtAccumIncrementer);
 
 		renderAccum(renderer);
 		renderer.render();
@@ -172,7 +175,7 @@ int main()
 
 void initVariables()
 {
-	g_rtAccumIncrementer = 0;
+	g_rtAccumReset = true;
 
 	g_cameraPosition.x = 0.f;
 	g_cameraPosition.y = 0.f;
@@ -216,7 +219,6 @@ void initAccumShader(Renderer::Shader& _shader)
 	_shader.vertexAttribAdd(1, Renderer::AttribType::VEC2);
 	_shader.vertexAttribsEnable();
 	_shader.uniformAdd("u_accumTexture", Renderer::UniformType::INT);
-	_shader.uniformAdd("u_frameCount", Renderer::UniformType::FLOAT);
 	_shader.setUniformInt("u_accumTexture", 0);
 }
 
@@ -227,7 +229,7 @@ void createAccumFBO(unsigned int& _framebuffer, unsigned int& _texture)
 
     glGenTextures(1, &_texture);
     glBindTexture(GL_TEXTURE_2D, _texture);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB32F, WINDOW_WIDTH, WINDOW_HEIGHT, 0, GL_RGB, GL_UNSIGNED_BYTE, nullptr);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, WINDOW_WIDTH, WINDOW_HEIGHT, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 
@@ -326,32 +328,32 @@ void update(float _dt)
 	if(g_cameraShouldMove[0]) // move up
 	{
 		g_cameraPosition = g_cameraPosition + g_cameraUp * (2.f * _dt);
-		g_rtAccumIncrementer = 0;
+		g_rtAccumReset = true;
 	}
 	if(g_cameraShouldMove[1]) // move down
 	{
 		g_cameraPosition = g_cameraPosition - g_cameraUp * (2.f * _dt);
-		g_rtAccumIncrementer = 0;
+		g_rtAccumReset = true;
 	}
 	if(g_cameraShouldMove[2]) // move left
 	{
 		g_cameraPosition = g_cameraPosition - camera_right * (2.f * _dt);
-		g_rtAccumIncrementer = 0;
+		g_rtAccumReset = true;
 	}
 	if(g_cameraShouldMove[3]) // move right
 	{
 		g_cameraPosition = g_cameraPosition + camera_right * (2.f * _dt);
-		g_rtAccumIncrementer = 0;
+		g_rtAccumReset = true;
 	}
 	if(g_cameraShouldMove[4]) // move forward
 	{
 		g_cameraPosition = g_cameraPosition + camera_forward * (2.f * _dt);
-		g_rtAccumIncrementer = 0;
+		g_rtAccumReset = true;
 	}
 	if(g_cameraShouldMove[5]) // move backward
 	{
 		g_cameraPosition = g_cameraPosition - camera_forward * (2.f * _dt);
-		g_rtAccumIncrementer = 0;
+		g_rtAccumReset = true;
 	}
 
 	if(g_mousePressed && g_prevMousePos != g_mousePos) // mouse drag for rotation
@@ -362,7 +364,7 @@ void update(float _dt)
 		g_cameraForward = g_cameraForward + camera_right * -diff.x + g_cameraUp * diff.y;
 		g_cameraForward.normalize();
 
-		g_rtAccumIncrementer = 0;
+		g_rtAccumReset = true;
 	}
 
 	g_prevMousePos = g_mousePos;
