@@ -69,16 +69,22 @@ vec4 brdf(vec3 _albedo, float _roughness, float _metallic, vec3 _reflectivity, v
 	return vec4((diffuse + cook_torrance) * dot(_N, _L), weight);
 }
 
-/*vec3 lambertian_sampling(vec3 _normal, vec3 _randVec3)
+vec3 lambertianSampling(vec3 _normal, vec3 _randVec3)
 {
 	return normalize(_normal + _randVec3 * 0.99f);
-}*/
+}
+
+vec3 metallicSampling(vec3 _normal, vec3 _rayDir, float _roughness, vec3 _randVec3)
+{
+	vec3 new_ray = reflect(_rayDir, _normal);
+	return new_ray + _randVec3 * _roughness * 0.5f;
+}
 
 void main()
 {
-	const float anti_alias_val = 0.7f;
+	const float anti_alias_val = 0.9f;
 	const int sphere_count = 4;
-	const int ray_bounce = 30;
+	const int ray_bounce = 6;
 
 	// might be a better way to randomize
 	vec2 tex_coord = v_texCoord + u_randSampler;
@@ -138,13 +144,22 @@ void main()
 		vec3 view_vector = -ray_direction;
 
 		ray_origin = surface + normal * 0.00000000001f;
-		ray_direction = normalize(normal + rand_vec.xyz * 0.99f);
+		//ray_direction = normalize(normal + rand_vec.xyz * 0.99f);
 		//ray_direction = reflect(ray_direction, normal);
+		
+		float roughness = 0.4f;
+		float metallic = 0.7f;
+		
+		vec3 metallic_sample = metallicSampling(normal, ray_direction, roughness, rand_vec.xyz);
+		ray_direction = lambertianSampling(normal, rand_vec.xyz);
+		ray_direction = mix(ray_direction, metallic_sample, metallic);
+		if(dot(ray_direction, normal) <= 0.f)
+			weight = 0.f;
 
 		absorb_col = clamp(absorb_col, vec3(0.f), vec3(1.f));
 		light_col += color[idx] * absorb_col * brightness[idx];
 
-		vec4 brdf_scattering = brdf(color[idx], 0.7f, 0.3f, color[idx], normalize(view_vector), normalize(ray_direction), normal);
+		vec4 brdf_scattering = brdf(color[idx], roughness, metallic, color[idx], normalize(view_vector), normalize(ray_direction), normal);
 		absorb_col *= brdf_scattering.rgb;
 		weight = clamp(weight, 0.f, 1.f);
 		weight *= brdf_scattering.a;
