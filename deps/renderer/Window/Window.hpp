@@ -94,6 +94,7 @@ namespace Renderer
 			bool willAutoMakeCurrent() const { return m_autoMakeCurrent; };
 			std::string getWindowTitle() const { return m_windowTitle; };
 			bool onFocus() const { return glfwGetWindowAttrib(m_window, GLFW_FOCUSED) == GLFW_TRUE; };
+			GLFWwindow* getWindow() { return m_window; };
 
 			static unsigned int getMonitorCount() { return s_monitorCount; };
 			static void GLFWInit();

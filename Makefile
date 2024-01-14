@@ -7,6 +7,7 @@ NATIVE_LIBS := -lm -framework Cocoa -framework OpenGL -framework IOKit -framewor
 DEP_LIBS := \
 			./deps/renderer/renderer.a\
 			./deps/GLFW/libglfw3.a\
+			./deps/imgui/libimgui.a\
 
 SRC_FILES := $(shell find ./src -name "*.cpp")
 OBJ_FILES := $(patsubst ./src/%.cpp, ./obj/%.o, $(SRC_FILES))

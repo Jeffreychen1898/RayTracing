@@ -5,6 +5,9 @@
 #include <cfloat>
 #include <unordered_set>
 
+#include "imgui/imgui.h"
+#include "imgui/imgui_impl_glfw.h"
+#include "imgui/imgui_impl_opengl3.h"
 #include <renderer/Renderer.hpp>
 
 // renderer todo:
@@ -14,6 +17,7 @@
 //		vector get angle
 //		shader must be bound when resizing window?
 //		vector and matrix *=, +=, etc
+//		window.getWindow() return glfwWindow*
 
 #define WINDOW_WIDTH 1024.f
 #define WINDOW_HEIGHT 768.f
@@ -36,6 +40,12 @@ static bool g_cameraShouldMove[6]; // up down left right forward backward
 static Renderer::Vec2<float> g_mousePos;
 static Renderer::Vec2<float> g_prevMousePos;
 static bool g_mousePressed;
+
+// parameters
+static float g_metallic;
+static float g_roughness;
+static Renderer::Vec3<float> g_skyColor;
+static float g_skyIntensity;
 
 // sampler
 static Renderer::Vec2<float> g_randVecTexCoord;
@@ -77,6 +87,11 @@ int main()
 	Renderer::Window window;
 	initWindow(window);
 
+	// initialize imgui
+	ImGui::CreateContext();
+	ImGui_ImplGlfw_InitForOpenGL(window.getWindow(), true);
+    ImGui_ImplOpenGL3_Init("#version 410");
+
 	// create the renderer
 	Renderer::Render renderer;
 	renderer.attach(&window);
@@ -116,9 +131,16 @@ int main()
 		auto elapsed_time = std::chrono::duration_cast<std::chrono::nanoseconds>(current_time - previous_time);
 		previous_time = current_time;
 		float dt = elapsed_time.count() * 1e-9;
-		std::cout << 1.f / dt << "\n";
+		//std::cout << 1.f / dt << "\n";
 
 		update(dt);
+
+		// imgui rendering
+
+		ImGui_ImplOpenGL3_NewFrame();
+        ImGui_ImplGlfw_NewFrame();
+        ImGui::NewFrame();
+
 
 		// render pass: ray tracing
 		glBindFramebuffer(GL_FRAMEBUFFER, accum_fbo);
@@ -128,6 +150,32 @@ int main()
 
 		random_vectors.bind(0);
 		renderer.bindShader(&shader);
+
+		// imgui shit
+        // Create a window
+        ImGui::Begin("Controls");
+
+		// imgui controls
+		if(ImGui::SliderFloat("Roughness", &g_roughness, 0.01f, 1.0f))
+		{
+			g_rtAccumReset = true;
+			shader.setUniformFloat("u_roughness", g_roughness);
+		}
+		if(ImGui::SliderFloat("Metallic", &g_metallic, 0.01f, 1.0f))
+		{
+			g_rtAccumReset = true;
+			shader.setUniformFloat("u_metallic", g_metallic);
+		}
+
+		//_shader.setUniformFloat("u_skyColor", *g_skyColor);
+		if(ImGui::DragFloat("Sky Intensity", &g_skyIntensity, 0.01f, 0.f, 100.f, "%.2f", ImGuiSliderFlags_Logarithmic))
+		{
+			g_rtAccumReset = true;
+			shader.setUniformFloat("u_skyIntensity", g_skyIntensity);
+		}
+
+        ImGui::End();
+		// end of imgui shit
 
 		if(g_rtAccumReset)
 		{
@@ -163,9 +211,17 @@ int main()
 		renderAccum(renderer);
 		renderer.render();
 
+		// imgui rendering
+		ImGui::Render();
+        ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+
 		window.swapBuffers();
 		Renderer::Window::pollEvents();
 	}
+	// imgui shut down
+	ImGui_ImplOpenGL3_Shutdown();
+    ImGui_ImplGlfw_Shutdown();
+    ImGui::DestroyContext();
 
 	glDeleteTextures(1, &accum_fbo_tex);
 	glDeleteFramebuffers(1, &accum_fbo);
@@ -191,6 +247,14 @@ void initVariables()
 
 	g_randVecTexCoord.x = 0.f;
 	g_randVecTexCoord.y = 0.f;
+
+	g_metallic = 0.5f;
+	g_roughness = 0.5f;
+
+	g_skyColor.x = 0.3f;
+	g_skyColor.y = 0.3f;
+	g_skyColor.z = 0.3f;
+	g_skyIntensity = 1.f;
 }
 
 void initRTShader(Renderer::Shader& _shader)
@@ -205,11 +269,19 @@ void initRTShader(Renderer::Shader& _shader)
 	_shader.uniformAdd("u_cameraForward", Renderer::UniformType::VEC3);
 	_shader.uniformAdd("u_cameraUp", Renderer::UniformType::VEC3);
 	_shader.uniformAdd("u_focalDistance", Renderer::UniformType::FLOAT);
+	_shader.uniformAdd("u_metallic", Renderer::UniformType::FLOAT);
+	_shader.uniformAdd("u_roughness", Renderer::UniformType::FLOAT);
+	_shader.uniformAdd("u_skyColor", Renderer::UniformType::VEC3);
+	_shader.uniformAdd("u_skyIntensity", Renderer::UniformType::FLOAT);
 	_shader.setUniformInt("u_randTexture", 0);
 	_shader.setUniformFloat("u_cameraPosition", *g_cameraPosition);
 	_shader.setUniformFloat("u_cameraForward", *g_cameraForward);
 	_shader.setUniformFloat("u_cameraUp", *g_cameraUp);
 	_shader.setUniformFloat("u_focalDistance", FOCAL_DISTANCE);
+	_shader.setUniformFloat("u_metallic", g_metallic);
+	_shader.setUniformFloat("u_roughness", g_roughness);
+	_shader.setUniformFloat("u_skyColor", *g_skyColor);
+	_shader.setUniformFloat("u_skyIntensity", g_skyIntensity);
 }
 
 void initAccumShader(Renderer::Shader& _shader)
@@ -266,7 +338,7 @@ void initWindow(Renderer::Window& _window)
 
 	_window.init(WINDOW_WIDTH, WINDOW_HEIGHT, "Ray Tracing");
 	_window.addEvents(win_evt);
-	_window.setVSync(false);
+	//_window.setVSync(false);
 }
 
 void renderRT(Renderer::Render& _renderer)
@@ -439,6 +511,12 @@ void WindowEvents::MouseMove(double _x, double _y)
 
 void WindowEvents::MousePressed(int _button, int _mods)
 {
+	if(_button == GLFW_MOUSE_BUTTON_RIGHT)
+		g_mousePressed = true;
+
+	if(_mods != GLFW_MOD_SHIFT)
+		return;
+
 	if(_button == GLFW_MOUSE_BUTTON_LEFT)
 		g_mousePressed = true;
 }
@@ -446,5 +524,7 @@ void WindowEvents::MousePressed(int _button, int _mods)
 void WindowEvents::MouseReleased(int _button, int _mods)
 {
 	if(_button == GLFW_MOUSE_BUTTON_LEFT)
+		g_mousePressed = false;
+	if(_button == GLFW_MOUSE_BUTTON_RIGHT)
 		g_mousePressed = false;
 }
