@@ -106,7 +106,7 @@ void main()
 	float radius[sphere_count] = float[](0.5f, 30.f, 10.f, 0.25f);
 	vec3 positions[sphere_count] = vec3[](vec3(0.f, -2.5f, -5.f), vec3(0.f, -33.f, -5.f), vec3(10.f, 10.f, -50.f), vec3(-.5f, -2.5f, -4.f));
 	vec3 color[sphere_count] = vec3[](vec3(0.7216f, 0.4510f, 0.2f), vec3(0.9f, 0.9f, 0.9f), vec3(1.f, 1.f, 1.f), vec3(0.5f, 0.5f, 1.f));
-	float brightness[sphere_count] = float[](0.f, 0.f, 10.f, 0.f);
+	float brightness[sphere_count] = float[](0.f, 0.f, 10.f, 5.f);
 
 	vec3 camera_forward = normalize(u_cameraForward);
 	vec3 camera_right = cross(camera_forward, normalize(u_cameraUp));
