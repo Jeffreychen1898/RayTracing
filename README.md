@@ -1,12 +1,6 @@
 # Ray Tracing
 ## In the GPU (OpenGL Fragment Shader)
 
-# Todo
-- Store objects in texture (objects should be defined on CPU)
-- BRDF and material properties
-- Apply OIDN for denoising
-- bloom effect
-
 # Examples
 
 The following examples uses PBR
@@ -30,3 +24,8 @@ The following examples are before I implemented PBR
 ![example 4](README_res/example4.png)
 
 ![example 5](README_res/example5.png)
+
+# Todo
+- Store objects in texture (objects should be defined on CPU)
+- Apply OIDN for denoising
+- bloom effect
