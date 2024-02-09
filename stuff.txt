@@ -1,0 +1,83 @@
+2 types of storage
+	The bounding box
+		first 2 bytes store the distance
+	The objects
+		store the u, v of the object
+		store the indices to the object
+
+
+the memory will have
+
+30 bits
+
+There will be 4 level of bounding boxes
+	The first level have 1 box
+	The second level have 8 boxes
+	The third level have 64 boxes
+	The fourth level have 512 boxes
+
+Assuming all triangles are evenly distributed, if we want 10 triangles in each box,
+we will be able to have around 5120 triangles.
+All the bounding boxes will be stored in the first row of the texture
+
+Each bounding box will store the following data
+	r: it's a bounding box
+	g: determines the level (1 bit for x, 1 bit for y, 1 bit for z)
+	b: jump location 1
+	a: jump location 2
+
+The position of the bounding box can be traced through the parent
+	create a float array of 3 elements to keep track of the position
+	at level 2, 1 * bit * scene_size / 2
+	at level 3, bit * scene_size / 4
+	at level 3, bit * scene_size / 8
+	sum them up
+
+	get the bit
+	0001 0101
+	multiply by 255 to get int
+
+The position of the jumping
+	b * a
+	blue is the texture divided by 255
+	alpha is the size of blue's space divided by 255
+
+The indices
+	r: it's a index
+	g: x coord lookup
+	b: y coord lookup
+
+	This implies texture must be 255x255 MAX
+
+
+
+int curr_level = 0
+int position_bit_x[3] = {0, 0, 0}
+int position_bit_y[3] = {0, 0, 0}
+int position_bit_z[3] = {0, 0, 0}
+vec2 curr_position = vec2(0, 0)
+
+do while(not in beginning)
+	vec4 sample = texture()
+	if(sample.r == BOX)
+		if(curr_level > 0)
+			ivec3 position_bits = getPosBits(sample.g)
+			// assign the position at the index
+
+		if(BVH intersection test)
+			curr_position ++;
+			continue
+
+		float jump_pos = getJumpPos(sample.ba)
+		curr_position = jump_pos
+		++curr_level
+		continue
+
+	else if(sample.r == JUMP)
+		float jump_pos_x = getJumpPos(sample.rg)
+		float jump_pos_y = getJumpPos(sample.ba)
+		curr_position = jump_pos
+		-- curr_level
+		continue
+	else if(sample.r == VERTEX)
+		//

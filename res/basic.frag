@@ -21,7 +21,7 @@ uniform float u_skyIntensity;
 layout(location = 0) out vec4 FragColor;
 
 #define PI 3.14159265f
-#define EP 0.00000001f
+#define EP 0.001f
 
 // need
 // 
@@ -68,10 +68,8 @@ vec4 brdf(vec3 _albedo, float _roughness, float _metallic, vec3 _reflectivity, v
 	float part_cook_torrance = D * G / max(4.f * max(dot(_V, _N), 0.f) * max(dot(_L, _N), 0.f), EP);
 
 	vec3 cook_torrance = ks * part_cook_torrance;
-	float weight = max(dot(_N, _L), 0.f) / PI;
-	//float metal_weight = D * G / max(4.f * max(dot(_V, _N), 0.f) * max(dot(_L, _N), 0.f), EP);
-	float metal_weight = D;
-	weight = mix(weight, metal_weight, _metallic);
+
+	float weight = G * D / (4.0 * max(EP, dot(_N, _L)) * max(EP, dot(_N, _V)));
 
 	// calculate L dot N
 	return vec4((diffuse + cook_torrance) * max(dot(_N, _L), 0.f), weight);

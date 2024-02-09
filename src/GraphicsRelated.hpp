@@ -5,7 +5,7 @@
 // fov of 90 deg: focal distance = window width
 #define FOCAL_DISTANCE 1024.f
 
-#define SAMPLES_PER_FRAME 10
+#define SAMPLES_PER_FRAME 1
 
 #include <iostream>
 #include <chrono>
